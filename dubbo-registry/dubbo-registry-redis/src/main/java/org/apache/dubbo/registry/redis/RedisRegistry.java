@@ -76,6 +76,14 @@ import static org.apache.dubbo.registry.Constants.UNREGISTER;
 
 /**
  * RedisRegistry
+ *
+ * 使用Redis作为注册中心，其订阅发布实现方式与ZooKeeper不同。我们在Redis注册中心
+ * 的数据结构中已经了解到，Redis订阅发布使用的是过期机制和publish/subscribe通道。服务提
+ * 供者发布服务，首先会在Redis中创建一个key,然后在通道中发布一条register事件消息。
+ * 但服务的key写入Redis后，发布者需要周期性地刷新key过期时间，在RedisRegistry构造方
+ * 法中会启动一个expireExecutor定时调度线程池，不断调用deferExpired()方法去延续key的超时时间。
+ * 如果服务提供者服务宕机，没有续期，则key会因为超时而被Redis删除，服务也就会被认定为下线。
+ *
  */
 public class RedisRegistry extends FailbackRegistry {
 
@@ -87,6 +95,9 @@ public class RedisRegistry extends FailbackRegistry {
 
     private static final String REDIS_MASTER_NAME_KEY = "master-name";
 
+    /**
+     * expireExecutor主要用于去周期性地刷新key过期时间；
+     */
     private final ScheduledExecutorService expireExecutor = Executors.newScheduledThreadPool(1, new NamedThreadFactory("DubboRegistryExpireTimer", true));
 
     private final ScheduledFuture<?> expireFuture;
@@ -191,8 +202,11 @@ public class RedisRegistry extends FailbackRegistry {
         this.root = group;
 
         this.expirePeriod = url.getParameter(SESSION_TIMEOUT_KEY, DEFAULT_SESSION_TIMEOUT);
+
+        // 初始化一个定时调度线程池expireExecutor，主要任务是延长key的过期时间和删除过期key。线程池调度的时间间隔是超时时间的一半。
         this.expireFuture = expireExecutor.scheduleWithFixedDelay(() -> {
             try {
+                // 延续过期时间
                 deferExpired(); // Extend the expiration time
             } catch (Throwable t) { // Defensive fault tolerance
                 logger.error("Unexpected exception occur at defer expire time, cause: " + t.getMessage(), t);
@@ -205,14 +219,19 @@ public class RedisRegistry extends FailbackRegistry {
             Pool<Jedis> jedisPool = entry.getValue();
             try {
                 try (Jedis jedis = jedisPool.getResource()) {
+                    // 获取本地缓存的所有已注册的key，并做遍历
                     for (URL url : new HashSet<>(getRegistered())) {
                         if (url.getParameter(DYNAMIC_KEY, true)) {
+                            // 去获取订阅路径类型
                             String key = toCategoryPath(url);
+                            // 如果续期返回1，则说明key以及被删除了
                             if (jedis.hset(key, url.toFullString(), String.valueOf(System.currentTimeMillis() + expirePeriod)) == 1) {
+                                // 这次算重新发布，因此在通道中广播
                                 jedis.publish(key, REGISTER);
                             }
                         }
                     }
+                    // 如果是服务治理中心，则还要清理过期的key
                     if (admin) {
                         clean(jedis);
                     }
@@ -226,11 +245,18 @@ public class RedisRegistry extends FailbackRegistry {
         }
     }
 
-    // The monitoring center is responsible for deleting outdated dirty data
+    /**
+     *
+     * 监控中心: dubbo-admin主要负责删除过期脏数据
+     *
+     * @param jedis
+     */
     private void clean(Jedis jedis) {
+        // 通过redis的key*获取所有的key，O(n)时间复杂度
         Set<String> keys = jedis.keys(root + ANY_VALUE);
         if (CollectionUtils.isNotEmpty(keys)) {
             for (String key : keys) {
+                // 获取key的所有map值
                 Map<String, String> values = jedis.hgetAll(key);
                 if (CollectionUtils.isNotEmptyMap(values)) {
                     boolean delete = false;
@@ -239,7 +265,9 @@ public class RedisRegistry extends FailbackRegistry {
                         URL url = URL.valueOf(entry.getKey());
                         if (url.getParameter(DYNAMIC_KEY, true)) {
                             long expire = Long.parseLong(entry.getValue());
+                            // 判断过期时间
                             if (expire < now) {
+                                // 删除过期键
                                 jedis.hdel(key, entry.getKey());
                                 delete = true;
                                 if (logger.isWarnEnabled()) {
@@ -248,6 +276,8 @@ public class RedisRegistry extends FailbackRegistry {
                             }
                         }
                     }
+                    // 如果已经删除了，则发布unregister事件;
+                    // 其他消费者监听到取消注册事件后，会删除本地对于服务的数据，保证数据一致性！
                     if (delete) {
                         jedis.publish(key, UNREGISTER);
                     }
@@ -295,20 +325,34 @@ public class RedisRegistry extends FailbackRegistry {
         ExecutorUtil.gracefulShutdown(expireExecutor, expirePeriod);
     }
 
+    /**
+     *
+     * 服务提供者和消费者都会使用注册功能。
+     *
+     * @param url
+     */
     @Override
     public void doRegister(URL url) {
+        // 获取订阅路径类型
         String key = toCategoryPath(url);
         String value = url.toFullString();
+        // 计算过期时间; expirePeriod是在初始化时设置的；
         String expire = String.valueOf(System.currentTimeMillis() + expirePeriod);
         boolean success = false;
         RpcException exception = null;
+
+        // 遍历jedisPools连接池中所有的节点
         for (Map.Entry<String, Pool<Jedis>> entry : jedisPools.entrySet()) {
             Pool<Jedis> jedisPool = entry.getValue();
             try {
                 try (Jedis jedis = jedisPool.getResource()) {
+                    // 设置key为订阅路径类型；
                     jedis.hset(key, value, expire);
+                    // 向Redis进行注册，并在通道中发布注册事件
                     jedis.publish(key, REGISTER);
                     success = true;
+
+                    // 如果是非replicate(复制)类型模式，只需要写一个节点，因此可以直接"break"，否则需要遍历所有节点，一次写入注册信息；
                     if (!replicate) {
                         break; //  If the server side has synchronized data, just write a single machine
                     }
@@ -356,35 +400,59 @@ public class RedisRegistry extends FailbackRegistry {
         }
     }
 
+    /**
+     *
+     * 订阅。
+     * 服务消费者、服务提供者和服务治理中心（dubbo-admin）都会使用注册中心的订阅功能。
+     *
+     * 在订阅时，如果是首次订阅，则会先创建一个Notifier内部类，这是一个线程类，在启动时会异步进行通道的订阅。
+     * 在启动Notifier线程的同时，主线程会继续往下执行，全量拉一次注册中心上所有的服务信息。
+     * 后续注册中心上的信息变更则通过Notifier线程订阅的通道推送事件来实现。
+     *
+     * @param url
+     * @param listener
+     */
     @Override
     public void doSubscribe(final URL url, final NotifyListener listener) {
         String service = toServicePath(url);
         Notifier notifier = notifiers.get(service);
+        // 如果notifier为空，则为首次订阅
         if (notifier == null) {
             Notifier newNotifier = new Notifier(service);
             notifiers.putIfAbsent(service, newNotifier);
             notifier = notifiers.get(service);
             if (notifier == newNotifier) {
+                // 启动notifier线程
                 notifier.start();
             }
         }
+
+        // notifier线程启动，而下面的main线程逻辑继续执行
+
         boolean success = false;
         RpcException exception = null;
         for (Map.Entry<String, Pool<Jedis>> entry : jedisPools.entrySet()) {
             Pool<Jedis> jedisPool = entry.getValue();
             try {
                 try (Jedis jedis = jedisPool.getResource()) {
+                    // 以*为结尾的服务路径，如：dubbo-admin就是*，它会订阅所有服务
                     if (service.endsWith(ANY_VALUE)) {
                         admin = true;
+                        // keys*，遍历所有的key
                         Set<String> keys = jedis.keys(service);
                         if (CollectionUtils.isNotEmpty(keys)) {
                             Map<String, Set<String>> serviceKeys = new HashMap<>();
                             for (String key : keys) {
+                                // 获取所有服务的路径
                                 String serviceKey = toServicePath(key);
+                                // 先默认给serviceKey添加value为一个空的HashSet;
+                                // computeIfAbsent的作用是先给key的value设置一个空的HashSet对象，并返回该对象让后序能够往其中添加值。
                                 Set<String> sk = serviceKeys.computeIfAbsent(serviceKey, k -> new HashSet<>());
+                                // 向serviceKey的value值中添加key; 注意value值是Set类型的，所以可以调用add往集合中添加key值
                                 sk.add(key);
                             }
                             for (Set<String> sk : serviceKeys.values()) {
+                                // 调用notify
                                 doNotify(jedis, sk, url, Collections.singletonList(listener));
                             }
                         }
@@ -606,24 +674,34 @@ public class RedisRegistry extends FailbackRegistry {
                                         continue;
                                     }
                                     try {
+                                        // 以*为结尾的服务路径，如：dubbo-admin就是*，它会订阅所有服务
                                         if (service.endsWith(ANY_VALUE)) {
+                                            // 是第一次订阅
                                             if (first) {
                                                 first = false;
+                                                // keys*，遍历所有的key
                                                 Set<String> keys = jedis.keys(service);
                                                 if (CollectionUtils.isNotEmpty(keys)) {
                                                     for (String s : keys) {
                                                         doNotify(jedis, s);
                                                     }
                                                 }
+                                                // 由于连接过程允许一定量的失败，会做重置，此处则重置了计数器
                                                 resetSkip();
                                             }
+                                            // jedis订阅，阻塞...
                                             jedis.psubscribe(new NotifySub(jedisPool), service); // blocking
                                         } else {
+                                            // 如果不是以*结尾，如服务提供者或消费者，则进来；
+                                            // 并且也是第一次订阅
                                             if (first) {
                                                 first = false;
+                                                // 触发通知，更新本地缓存，并重置失败计算器
                                                 doNotify(jedis, service);
                                                 resetSkip();
                                             }
+
+                                            // 订阅一个或多个符合给定模式的频道
                                             jedis.psubscribe(new NotifySub(jedisPool), service + PATH_SEPARATOR + ANY_VALUE); // blocking
                                         }
                                         break;
