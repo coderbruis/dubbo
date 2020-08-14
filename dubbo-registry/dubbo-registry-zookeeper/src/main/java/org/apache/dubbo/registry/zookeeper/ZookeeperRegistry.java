@@ -141,43 +141,71 @@ public class ZookeeperRegistry extends FailbackRegistry {
         }
     }
 
+    /**
+     * 进行订阅操作
+     *
+     * @param url
+     * @param listener
+     */
     @Override
     public void doSubscribe(final URL url, final NotifyListener listener) {
         try {
+            // 订阅所有数据
+            // 服务护理中心会处理所有service层的订阅，service被设置成特殊值*
             if (ANY_VALUE.equals(url.getServiceInterface())) {
+
+                // 此处主要支持Dubbo服务治理平台（dubbo-admin），平台在启动时会订阅全量接口，它会感知每个服务的状态。
+
                 String root = toRootPath();
+                // 获取监听器
                 ConcurrentMap<NotifyListener, ChildListener> listeners = zkListeners.computeIfAbsent(url, k -> new ConcurrentHashMap<>());
+                // 如果zkListener为空，则说明第一次调用，新建一个listener;
+                // 这里使用了Childlistener的childChanged(string parentPath, currentChilds)方法
                 ChildListener zkListener = listeners.computeIfAbsent(listener, k -> (parentPath, currentChilds) -> {
+                    // 如果子节点有变化则会接收到通知，则调用进来；然后遍历所有的子节点；
                     for (String child : currentChilds) {
                         child = URL.decode(child);
+                        // 如果存在子节点还未被订阅，则说明是新的节点，订阅！
                         if (!anyServices.contains(child)) {
                             anyServices.add(child);
+                            // 订阅操作
                             subscribe(url.setPath(child).addParameters(INTERFACE_KEY, child,
                                     Constants.CHECK_KEY, String.valueOf(false)), k);
                         }
                     }
                 });
+                // 创建持久节点, 接下来订阅持久节点的直接子节点
                 zkClient.create(root, false);
                 List<String> services = zkClient.addChildListener(root, zkListener);
                 if (CollectionUtils.isNotEmpty(services)) {
+                    // 遍历所有子节点进行订阅
                     for (String service : services) {
                         service = URL.decode(service);
                         anyServices.add(service);
+                        // 增加当前节点的订阅，并且会返回该节点下所有子节点列表
                         subscribe(url.setPath(service).addParameters(INTERFACE_KEY, service,
                                 Constants.CHECK_KEY, String.valueOf(false)), listener);
                     }
                 }
             } else {
+                // 以下是普通消费则的订阅逻辑
+
                 List<URL> urls = new ArrayList<>();
+                // 获取URL订阅的类型
                 for (String path : toCategoriesPath(url)) {
+
+                    // 如果listeners缓存为空，则创建新的缓存
                     ConcurrentMap<NotifyListener, ChildListener> listeners = zkListeners.computeIfAbsent(url, k -> new ConcurrentHashMap<>());
+                    // 如果listeners缓存数据为空，则创建新的ChildListenr，调用ChildListener的childChanged方法；当有子节点接收到通知时，则调用childChanged方法逻辑；
                     ChildListener zkListener = listeners.computeIfAbsent(listener, k -> (parentPath, currentChilds) -> ZookeeperRegistry.this.notify(url, k, toUrlsWithEmpty(url, parentPath, currentChilds)));
                     zkClient.create(path, false);
+                    // 订阅，返回该节点下的子路径并缓存
                     List<String> children = zkClient.addChildListener(path, zkListener);
                     if (children != null) {
                         urls.addAll(toUrlsWithEmpty(url, path, children));
                     }
                 }
+                // 回调NotifyListener，更新本地缓存信息
                 notify(url, listener, urls);
             }
         } catch (Throwable e) {
@@ -241,11 +269,21 @@ public class ZookeeperRegistry extends FailbackRegistry {
         return toRootDir() + URL.encode(name);
     }
 
+    /**
+     *
+     * 根据URl的类别，获取一组要订阅的路径。
+     * 路径包含四种类型：providers、consumers、routers、configurators
+     *
+     * @param url
+     * @return
+     */
     private String[] toCategoriesPath(URL url) {
         String[] categories;
+        // 如果URL类别是*，则订阅四种路径
         if (ANY_VALUE.equals(url.getParameter(CATEGORY_KEY))) {
             categories = new String[]{PROVIDERS_CATEGORY, CONSUMERS_CATEGORY, ROUTERS_CATEGORY, CONFIGURATORS_CATEGORY};
         } else {
+            // 默认订阅providers
             categories = url.getParameter(CATEGORY_KEY, new String[]{DEFAULT_CATEGORY});
         }
         String[] paths = new String[categories.length];
