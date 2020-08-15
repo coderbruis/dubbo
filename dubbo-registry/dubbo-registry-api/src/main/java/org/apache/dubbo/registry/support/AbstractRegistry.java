@@ -66,6 +66,12 @@ import static org.apache.dubbo.registry.Constants.REGISTRY_FILESAVE_SYNC_KEY;
 import static org.apache.dubbo.registry.Constants.REGISTRY__LOCAL_FILE_CACHE_ENABLED;
 
 /**
+ *
+ * 对于注册Dubbo的注册中心，需要一个"缓存机制"。
+ * 因为缓存的存在就是通过空间换时间，如果每次服务调用都需要先从注册中心获取一次调用的服务列表，则会让注册中心承担巨大的流量压力。
+ * 另外，每次额外的网络请求也会让整个系统的性能下降。所以在Dubbo的注册中心，实现了通用的"缓存机制"。
+ * 具体实现逻辑在注册中心的抽象类：AbstractRegistry 类中。
+ *
  * AbstractRegistry. (SPI, Prototype, ThreadSafe)
  */
 public abstract class AbstractRegistry implements Registry {
@@ -78,7 +84,15 @@ public abstract class AbstractRegistry implements Registry {
     private static final int MAX_RETRY_TIMES_SAVE_PROPERTIES = 3;
     // Log output
     protected final Logger logger = LoggerFactory.getLogger(getClass());
-    // Local disk cache, where the special key value.registries records the list of registry centers, and the others are the list of notified service providers
+    /**
+     * 本地磁盘缓存，其中特殊键key.registries记录所有的注册表中心列表，其他是已通知服务提供商的列表。
+     *
+     * 对于Properties，保存了所有服务提供者的URL，使用了URL#serviceKey()作为key，提供者列表、路由规则列表、配置规则列表作为value。
+     * 由于value是列表，所以如果value存在多个值时，通过空格隔开。
+     *
+     * 还有一个特殊的key.registies,保存所有的注册中心的地址。如果应用在启动过程中，注册中心无法连接或宕机，则Dubbo框架会自动通过本地缓存加载Invokers。
+     *
+     */
     private final Properties properties = new Properties();
     // File cache timing writing
     private final ExecutorService registryCacheExecutor = Executors.newFixedThreadPool(1, new NamedThreadFactory("DubboSaveRegistryCache", true));
@@ -88,9 +102,17 @@ public abstract class AbstractRegistry implements Registry {
     private final AtomicInteger savePropertiesRetryTimes = new AtomicInteger();
     private final Set<URL> registered = new ConcurrentHashSet<>();
     private final ConcurrentMap<URL, Set<NotifyListener>> subscribed = new ConcurrentHashMap<>();
+    /**
+     * 内存中的服务缓存对象
+     * notified中key表示的是消费者的URL，value是一个Map对象，Map对象的key是路径分类，包含了：providers、consumers、routes、configurators，
+     * Map的value则表示对应的服务列表。
+     * 对于没有服务提供者提供服务的URL（消费者），它会以特殊的empty://前缀开头。
+     */
     private final ConcurrentMap<URL, Map<String, List<URL>>> notified = new ConcurrentHashMap<>();
     private URL registryUrl;
-    // Local disk cache file
+    /**
+     * 定义的本地磁盘缓存文件
+     */
     private File file;
 
     public AbstractRegistry(URL url) {
@@ -210,11 +232,17 @@ public abstract class AbstractRegistry implements Registry {
         }
     }
 
+    /**
+     * 在服务初始化的时候，AbstractRegistry构造函数里会从本地磁盘文件中把持久化的注册
+     * 数据读到Properties对象里，并加载到内存缓存中
+     */
     private void loadProperties() {
         if (file != null && file.exists()) {
             InputStream in = null;
             try {
+                // 获取文件输入流, 将file中内容读取到InputStream中。
                 in = new FileInputStream(file);
+                // 将InputStream中二进制数据读取到Properties对象中
                 properties.load(in);
                 if (logger.isInfoEnabled()) {
                     logger.info("Load registry cache file " + file + ", data: " + properties);
