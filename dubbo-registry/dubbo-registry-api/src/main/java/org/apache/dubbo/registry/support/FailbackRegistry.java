@@ -43,20 +43,40 @@ import static org.apache.dubbo.registry.Constants.DEFAULT_REGISTRY_RETRY_PERIOD;
 import static org.apache.dubbo.registry.Constants.REGISTRY_RETRY_PERIOD_KEY;
 
 /**
+ *
+ * 失败重试机制。此类事在AbstractRegistry功能基础上有添加了重试机制作为抽象能力。ZookeeperRegistry和RedisRegistry继承了该抽象方法后，可以直接使用。
+ *
  * FailbackRegistry. (SPI, Prototype, ThreadSafe)
  */
 public abstract class FailbackRegistry extends AbstractRegistry {
 
     /*  retry task map */
 
+    /**
+     * 发起注册失败的URL集合
+     */
     private final ConcurrentMap<URL, FailedRegisteredTask> failedRegistered = new ConcurrentHashMap<URL, FailedRegisteredTask>();
 
+    /**
+     * 取消注册失败的URL集合
+     */
     private final ConcurrentMap<URL, FailedUnregisteredTask> failedUnregistered = new ConcurrentHashMap<URL, FailedUnregisteredTask>();
 
+    /**
+     * 发起订阅失败的监听器集合
+     * Holder是FailbackRegistry静态内部类。
+     *
+     */
     private final ConcurrentMap<Holder, FailedSubscribedTask> failedSubscribed = new ConcurrentHashMap<Holder, FailedSubscribedTask>();
 
+    /**
+     * 取消订阅失败的监听器集合
+     */
     private final ConcurrentMap<Holder, FailedUnsubscribedTask> failedUnsubscribed = new ConcurrentHashMap<Holder, FailedUnsubscribedTask>();
 
+    /**
+     * 通知失败的URL结合
+     */
     private final ConcurrentMap<Holder, FailedNotifiedTask> failedNotified = new ConcurrentHashMap<Holder, FailedNotifiedTask>();
 
     /**

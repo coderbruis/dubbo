@@ -293,6 +293,7 @@ public abstract class AbstractRegistry implements Registry {
             }
         } else {
             final AtomicReference<List<URL>> reference = new AtomicReference<>();
+            // ???? 没法理解到
             NotifyListener listener = reference::set;
             subscribe(url, listener); // Subscribe logic guarantees the first notify to return
             List<URL> urls = reference.get();
@@ -361,6 +362,10 @@ public abstract class AbstractRegistry implements Registry {
         }
     }
 
+    /**
+     * 缓存恢复
+     * @throws Exception
+     */
     protected void recover() throws Exception {
         // register
         Set<URL> recoverRegistered = new HashSet<>(getRegistered());
@@ -415,6 +420,8 @@ public abstract class AbstractRegistry implements Registry {
     /**
      * Notify changes from the Provider side.
      *
+     * 方法中封装了更新内存缓存和更新文件缓存的逻辑。当客户端第一次订阅获取全量数据，或者后续由于订阅得到新数据时，都会调用该方法进行保存。
+     *
      * @param url      consumer side url
      * @param listener listener
      * @param urls     provider latest urls
@@ -458,6 +465,13 @@ public abstract class AbstractRegistry implements Registry {
         }
     }
 
+    /**
+     * 缓存的保存
+     *
+     * 缓存的保存有同步和异步两种方式。异步会使用线程池异步保存，如果线程在执行过程中出现异常，则会再次调用线程池不断的重试。
+     *
+     * @param url
+     */
     private void saveProperties(URL url) {
         if (file == null) {
             return;
@@ -479,8 +493,10 @@ public abstract class AbstractRegistry implements Registry {
             properties.setProperty(url.getServiceKey(), buf.toString());
             long version = lastCacheChanged.incrementAndGet();
             if (syncSaveFile) {
+                // 同步保存
                 doSaveProperties(version);
             } else {
+                // 启动线程池异步保存。传入的version是AtomicLong类型的版本好，确保CAS性。
                 registryCacheExecutor.execute(new SaveProperties(version));
             }
         } catch (Throwable t) {
