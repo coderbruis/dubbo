@@ -32,9 +32,22 @@ public final class FailedRegisteredTask extends AbstractRetryTask {
         super(url, registry, NAME);
     }
 
+    /**
+     * 重试核心逻辑，重新去注册中心注册。
+     *
+     * 实现了了AbstractRetryTask的doRetry抽象方法
+     *
+     * 设计模式：模板模式
+     *
+     * @param url
+     * @param registry
+     * @param timeout
+     */
     @Override
     protected void doRetry(URL url, FailbackRegistry registry, Timeout timeout) {
+        // 模板方法由子类提供实现, 即重试核心逻辑由子类提供
         registry.doRegister(url);
+        // 从failedRegisteredTask的map中移除该URL，表示已经重试了
         registry.removeFailedRegisteredTask(url);
     }
 }

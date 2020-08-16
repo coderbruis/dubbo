@@ -92,6 +92,7 @@ public abstract class FailbackRegistry extends AbstractRegistry {
         this.retryPeriod = url.getParameter(REGISTRY_RETRY_PERIOD_KEY, DEFAULT_REGISTRY_RETRY_PERIOD);
 
         // since the retry task will not be very much. 128 ticks is enough.
+        // 因为重试任务不会很多，所以128个时间刻度(链表)就足够了。
         retryTimer = new HashedWheelTimer(new NamedThreadFactory("DubboRegistryRetryTimer", true), retryPeriod, TimeUnit.MILLISECONDS, 128);
     }
 
@@ -118,12 +119,19 @@ public abstract class FailbackRegistry extends AbstractRegistry {
         failedNotified.remove(h);
     }
 
+    /**
+     * 添加注册失败任务
+     * @param url
+     */
     private void addFailedRegistered(URL url) {
+        // 判断缓存中是不是有失败任务
         FailedRegisteredTask oldOne = failedRegistered.get(url);
         if (oldOne != null) {
             return;
         }
+        // 如果缓存中没有失败任务，则创建一个虚拟的失败注册任务
         FailedRegisteredTask newTask = new FailedRegisteredTask(url, this);
+        // 添加到缓存中
         oldOne = failedRegistered.putIfAbsent(url, newTask);
         if (oldOne == null) {
             // never has a retry task. then start a new task for retry.
@@ -131,6 +139,10 @@ public abstract class FailbackRegistry extends AbstractRegistry {
         }
     }
 
+    /**
+     * 移除注册失败任务
+     * @param url
+     */
     private void removeFailedRegistered(URL url) {
         FailedRegisteredTask f = failedRegistered.remove(url);
         if (f != null) {
@@ -138,6 +150,10 @@ public abstract class FailbackRegistry extends AbstractRegistry {
         }
     }
 
+    /**
+     * 添加取消注册失败任务
+     * @param url
+     */
     private void addFailedUnregistered(URL url) {
         FailedUnregisteredTask oldOne = failedUnregistered.get(url);
         if (oldOne != null) {
@@ -246,17 +262,23 @@ public abstract class FailbackRegistry extends AbstractRegistry {
         return failedNotified;
     }
 
+    /**
+     * 服务注册
+     * @param url
+     */
     @Override
     public void register(URL url) {
         if (!acceptable(url)) {
             logger.info("URL " + url + " will not be registered to Registry. Registry " + url + " does not accept service of this protocol type.");
             return;
         }
+        // 调用父类AbstractRegistry的register方法
         super.register(url);
         removeFailedRegistered(url);
         removeFailedUnregistered(url);
         try {
-            // Sending a registration request to the server side
+            // 调用子类实现的doRegister方法
+            // 此处使用的模板方法设计模式
             doRegister(url);
         } catch (Exception e) {
             Throwable t = e;
@@ -276,6 +298,7 @@ public abstract class FailbackRegistry extends AbstractRegistry {
             }
 
             // Record a failed registration request to a failed list, retry regularly
+            // 如果注册失败了，则添加一个注册失败的任务
             addFailedRegistered(url);
         }
     }
@@ -344,6 +367,11 @@ public abstract class FailbackRegistry extends AbstractRegistry {
         }
     }
 
+    /**
+     * 订阅请求
+     * @param url
+     * @param listener
+     */
     @Override
     public void subscribe(URL url, NotifyListener listener) {
         super.subscribe(url, listener);
@@ -428,9 +456,15 @@ public abstract class FailbackRegistry extends AbstractRegistry {
         super.notify(url, listener, urls);
     }
 
+    /**
+     *
+     * 向注册中心中的URL添加失败注册以及失败订阅任务事件
+     *
+     * @throws Exception
+     */
     @Override
     protected void recover() throws Exception {
-        // register
+        // 获取注册中心注册的URL
         Set<URL> recoverRegistered = new HashSet<URL>(getRegistered());
         if (!recoverRegistered.isEmpty()) {
             if (logger.isInfoEnabled()) {
@@ -461,7 +495,10 @@ public abstract class FailbackRegistry extends AbstractRegistry {
         retryTimer.stop();
     }
 
-    // ==== Template method ====
+    /**
+     * 模板方法，FailbackRegistry定义模板方法，方法逻辑实现由其子类提供。
+     * @param url
+     */
 
     public abstract void doRegister(URL url);
 

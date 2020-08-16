@@ -21,6 +21,8 @@ import org.apache.dubbo.common.URL;
 import java.util.List;
 
 /**
+ * 通知监听器
+ *
  * NotifyListener. (API, Prototype, ThreadSafe)
  *
  * @see org.apache.dubbo.registry.RegistryService#subscribe(URL, NotifyListener)
@@ -28,8 +30,16 @@ import java.util.List;
 public interface NotifyListener {
 
     /**
-     * Triggered when a service change notification is received.
-     * <p>
+     *
+     * 当收到服务变更通知时触发。
+     *
+     * 通知需处理的契约：
+     * 1. 总是以服务接口和数据类型为维度全量通知，即不会通知一个服务的同类型的部分数据，用户不需要对比上一次通知结果。
+     * 2. 订阅时的第一次通知，必须是一个服务的所有类型数据的全量通知。
+     * 3. 中途变更时，允许不同类型的数据分开通知，比如：providers, consumers, routes, overrides，允许只通知其中一种类型，但该类型的数据必须是全量的，不是增量的。
+     * 4. 如果一种类型的数据为空，需通知一个empty协议并带category参数的标识性URL数据。
+     * 5. 通知者(即注册中心实现)需保证通知的顺序，比如：单线程推送，队列串行化，带版本对比。
+     *
      * Notify needs to support the contract: <br>
      * 1. Always notifications on the service interface and the dimension of the data type. that is, won't notify part of the same type data belonging to one service. Users do not need to compare the results of the previous notification.<br>
      * 2. The first notification at a subscription must be a full notification of all types of data of a service.<br>

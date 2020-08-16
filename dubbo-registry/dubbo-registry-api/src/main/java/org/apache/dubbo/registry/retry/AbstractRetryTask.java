@@ -34,6 +34,9 @@ import static org.apache.dubbo.registry.Constants.REGISTRY_RETRY_PERIOD_KEY;
 import static org.apache.dubbo.registry.Constants.REGISTRY_RETRY_TIMES_KEY;
 
 /**
+ *
+ * 抽象重试任务
+ *
  * AbstractRetryTask
  */
 public abstract class AbstractRetryTask implements TimerTask {
@@ -41,17 +44,17 @@ public abstract class AbstractRetryTask implements TimerTask {
     protected final Logger logger = LoggerFactory.getLogger(getClass());
 
     /**
-     * url for retry task
+     * 重试任务的URL
      */
     protected final URL url;
 
     /**
-     * registry for this task
+     * 重试任务的失败重试机制
      */
     protected final FailbackRegistry registry;
 
     /**
-     * retry period
+     * 重试期
      */
     final long retryPeriod;
 
@@ -61,13 +64,17 @@ public abstract class AbstractRetryTask implements TimerTask {
     private final int retryTimes;
 
     /**
-     * task name for this task
+     * 任务名称
      */
     private final String taskName;
 
     /**
      * times of retry.
      * retry task is execute in single thread so that the times is not need volatile.
+     *
+     * 重试次数
+     * 重试任务是执行在单线程中的，所以重试次数不需要进行volatile设置。
+     *
      */
     private int times = 1;
 
@@ -106,6 +113,13 @@ public abstract class AbstractRetryTask implements TimerTask {
         timer.newTimeout(timeout.task(), tick, TimeUnit.MILLISECONDS);
     }
 
+    /**
+     *
+     * 执行重试
+     *
+     * @param timeout a handle which is associated with this task
+     * @throws Exception
+     */
     @Override
     public void run(Timeout timeout) throws Exception {
         if (timeout.isCancelled() || timeout.timer().isStop() || isCancel()) {
