@@ -77,12 +77,29 @@ public class DubboBeanDefinitionParser implements BeanDefinitionParser {
         this.required = required;
     }
 
+    /**
+     *
+     * 该方法步骤如下：
+     * 1. 初始化RootBeanDefinition
+     * 2. 获取beanId
+     * 3. 将获取到的RootBeanDefinition注册到Spring中
+     * 4. 将xml中配置的信息放到beandefinition的PropertyValues中
+     *
+     * @param element
+     * @param parserContext
+     * @param beanClass
+     * @param required
+     * @return
+     */
     @SuppressWarnings("unchecked")
     private static RootBeanDefinition parse(Element element, ParserContext parserContext, Class<?> beanClass, boolean required) {
+        // 初始化 RootBeanDefinition
         RootBeanDefinition beanDefinition = new RootBeanDefinition();
         beanDefinition.setBeanClass(beanClass);
         beanDefinition.setLazyInit(false);
+        // 获取beanId
         String id = resolveAttribute(element, "id", parserContext);
+        // 如果没有beanId则将beanName设置为beanId
         if (StringUtils.isEmpty(id) && required) {
             String generatedBeanName = resolveAttribute(element, "name", parserContext);
             if (StringUtils.isEmpty(generatedBeanName)) {
@@ -92,6 +109,7 @@ public class DubboBeanDefinitionParser implements BeanDefinitionParser {
                     generatedBeanName = resolveAttribute(element, "interface", parserContext);
                 }
             }
+            // 如果beanName也为空，则用beanClass作为beanId
             if (StringUtils.isEmpty(generatedBeanName)) {
                 generatedBeanName = beanClass.getName();
             }
@@ -101,10 +119,13 @@ public class DubboBeanDefinitionParser implements BeanDefinitionParser {
                 id = generatedBeanName + (counter++);
             }
         }
+        // Step3 将获取到的Bean注册到Spring
         if (StringUtils.isNotEmpty(id)) {
+            // BeanId 出现重复则抛异常
             if (parserContext.getRegistry().containsBeanDefinition(id)) {
                 throw new IllegalStateException("Duplicate spring bean id " + id);
             }
+            // 将xml转换为的Bean注册到Spring的parserContext
             parserContext.getRegistry().registerBeanDefinition(id, beanDefinition);
             beanDefinition.getPropertyValues().addPropertyValue("id", id);
         }
