@@ -101,6 +101,11 @@ import static org.apache.dubbo.rpc.Constants.SCOPE_REMOTE;
 import static org.apache.dubbo.rpc.Constants.TOKEN_KEY;
 import static org.apache.dubbo.rpc.cluster.Constants.EXPORT_KEY;
 
+
+/**
+ * 服务暴露的入口类
+ * @param <T>
+ */
 public class ServiceConfig<T> extends ServiceConfigBase<T> {
 
     public static final Logger logger = LoggerFactory.getLogger(ServiceConfig.class);
@@ -203,6 +208,7 @@ public class ServiceConfig<T> extends ServiceConfigBase<T> {
         if (shouldDelay()) {
             DELAY_EXPORT_EXECUTOR.schedule(this::doExport, getDelay(), TimeUnit.MILLISECONDS);
         } else {
+            // 服务暴露
             doExport();
         }
 
@@ -285,6 +291,9 @@ public class ServiceConfig<T> extends ServiceConfigBase<T> {
     }
 
 
+    /**
+     * 服务暴露的入口点
+     */
     protected synchronized void doExport() {
         if (unexported) {
             throw new IllegalStateException("The service " + interfaceClass.getName() + " has already unexported!");
@@ -300,13 +309,20 @@ public class ServiceConfig<T> extends ServiceConfigBase<T> {
         doExportUrls();
     }
 
+    /**
+     *
+     * Dubbo支持多注册中心同时写，如果配置了服务同时注册多个注册中心，则会下列方法中依次向注册中心暴露服务。
+     *
+     */
     @SuppressWarnings({"unchecked", "rawtypes"})
     private void doExportUrls() {
         ServiceRepository repository = ApplicationModel.getServiceRepository();
         ServiceDescriptor serviceDescriptor = repository.registerService(getInterfaceClass());
         repository.registerProvider(
+                // 获取服务的唯一服务名称
                 getUniqueServiceName(),
                 ref,
+                // 服务描述符
                 serviceDescriptor,
                 this,
                 serviceMetadata
@@ -326,6 +342,13 @@ public class ServiceConfig<T> extends ServiceConfigBase<T> {
         }
     }
 
+    /**
+     *
+     * 真正的服务暴露逻辑
+     *
+     * @param protocolConfig
+     * @param registryURLs
+     */
     private void doExportUrlsFor1Protocol(ProtocolConfig protocolConfig, List<URL> registryURLs) {
         String name = protocolConfig.getName();
         if (StringUtils.isEmpty(name)) {

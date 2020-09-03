@@ -23,7 +23,7 @@ import org.apache.dubbo.common.extension.ExtensionLoader;
 import org.apache.dubbo.common.serialize.ObjectInput;
 import org.apache.dubbo.common.serialize.ObjectOutput;
 import org.apache.dubbo.common.serialize.Serialization;
-import org.apache.dubbo.common.serialize.nativejava.NativeJavaSerialization;
+//import org.apache.dubbo.common.serialize.nativejava.NativeJavaSerialization;
 import org.apache.dubbo.common.utils.NetUtils;
 import org.apache.dubbo.rpc.Exporter;
 import org.apache.dubbo.rpc.Invoker;
@@ -84,7 +84,7 @@ public class HessianProtocolTest {
         exporter.unexport();
     }
 
-    @Test
+    /*@Test
     public void testGenericInvokeWithNativeJava() throws IOException, ClassNotFoundException {
         HessianServiceImpl server = new HessianServiceImpl();
         Assertions.assertFalse(server.isCalled());
@@ -110,7 +110,7 @@ public class HessianProtocolTest {
         Assertions.assertEquals("Hello, haha", objectInput.readObject());
         invoker.destroy();
         exporter.unexport();
-    }
+    }*/
 
     @Test
     public void testGenericInvokeWithRpcContext() {
