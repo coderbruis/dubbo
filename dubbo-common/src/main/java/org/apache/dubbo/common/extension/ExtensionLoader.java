@@ -99,20 +99,18 @@ public class ExtensionLoader<T> {
 
     private final ConcurrentMap<Class<?>, String> cachedNames = new ConcurrentHashMap<>();
 
+    // 扩展实现类缓存
     private final Holder<Map<String, Class<?>>> cachedClasses = new Holder<>();
 
+    // @Activate注解的实现类缓存
     private final Map<String, Object> cachedActivates = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, Holder<Object>> cachedInstances = new ConcurrentHashMap<>();
+    // 扩展点适配实例缓存
     private final Holder<Object> cachedAdaptiveInstance = new Holder<>();
     private volatile Class<?> cachedAdaptiveClass = null;
 
     // 记录了当前扩展类加载器@SPI注解的value值，即默认的扩展名
     private String cachedDefaultName;
-    private volatile Throwable createAdaptiveInstanceError;
-
-    private Set<Class<?>> cachedWrapperClasses;
-
-    private Map<String, IllegalStateException> exceptions = new ConcurrentHashMap<>();
 
     /**
      *
@@ -122,6 +120,11 @@ public class ExtensionLoader<T> {
      * 3. ServiceLoadingStrategy（加载用于兼容JDK的SPI）
      */
     private static volatile LoadingStrategy[] strategies = loadLoadingStrategies();
+    private volatile Throwable createAdaptiveInstanceError;
+
+    private Set<Class<?>> cachedWrapperClasses;
+
+    private Map<String, IllegalStateException> exceptions = new ConcurrentHashMap<>();
 
     public static void setLoadingStrategies(LoadingStrategy... strategies) {
         if (ArrayUtils.isNotEmpty(strategies)) {
@@ -834,8 +837,9 @@ public class ExtensionLoader<T> {
 
     private void loadDirectory(Map<String, Class<?>> extensionClasses, String dir, String type,
                                boolean extensionLoaderClassLoaderFirst, boolean overridden, String... excludedPackages) {
-        // dir就是指的 META-INF；type指的当前ExtensionLoader的类型，包括：internal、dubbo、service这三种，所以
-        // fileName会拼接成：META-INF/services、META-INF/dubbo、META-INF/dubbo/internal这三个目录
+        // dir就是指的 META-INF/services、META-INF/dubbo、META-INF/dubbo/internal这三个目录
+        // type指的是扩展点实现类类型的全限定类名称
+        // fileName会拼接成：META-INF/services、META-INF/dubbo、META-INF/dubbo/internal这三个目录 + 扩展点实现类名称
         String fileName = dir + type;
         try {
             Enumeration<java.net.URL> urls = null;
