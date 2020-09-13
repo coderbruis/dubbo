@@ -85,12 +85,16 @@ public class ExtensionLoader<T> {
 
     private static final Pattern NAME_SEPARATOR = Pattern.compile("\\s*[,]+\\s*");
 
+    // 扩展点加载器缓存
     private static final ConcurrentMap<Class<?>, ExtensionLoader<?>> EXTENSION_LOADERS = new ConcurrentHashMap<>(64);
 
+    // 扩展点实现类对象缓存  key是实现类的class，value是实现类的实例对象
     private static final ConcurrentMap<Class<?>, Object> EXTENSION_INSTANCES = new ConcurrentHashMap<>(64);
 
+    // 扩展点加载器类型，负责当前扩展点的加载工作
     private final Class<?> type;
 
+    // 扩展类工厂
     private final ExtensionFactory objectFactory;
 
     private final ConcurrentMap<Class<?>, String> cachedNames = new ConcurrentHashMap<>();
@@ -101,6 +105,8 @@ public class ExtensionLoader<T> {
     private final ConcurrentMap<String, Holder<Object>> cachedInstances = new ConcurrentHashMap<>();
     private final Holder<Object> cachedAdaptiveInstance = new Holder<>();
     private volatile Class<?> cachedAdaptiveClass = null;
+
+    // 记录了当前扩展类加载器@SPI注解的value值，即默认的扩展名
     private String cachedDefaultName;
     private volatile Throwable createAdaptiveInstanceError;
 
@@ -108,6 +114,13 @@ public class ExtensionLoader<T> {
 
     private Map<String, IllegalStateException> exceptions = new ConcurrentHashMap<>();
 
+    /**
+     *
+     * 加载策略 加载策略有三种（1~3顺序优先级逐渐降低）：
+     * 1. DubboInternalLoadingStrategy（加载内部的SPI）
+     * 2. DubboLoadingStrategy（加载用户自定义的SPI）
+     * 3. ServiceLoadingStrategy（加载用于兼容JDK的SPI）
+     */
     private static volatile LoadingStrategy[] strategies = loadLoadingStrategies();
 
     public static void setLoadingStrategies(LoadingStrategy... strategies) {
@@ -422,6 +435,7 @@ public class ExtensionLoader<T> {
         }
         final Holder<Object> holder = getOrCreateHolder(name);
         Object instance = holder.get();
+        // 双重检测，防止指令重排序
         if (instance == null) {
             synchronized (holder) {
                 instance = holder.get();
@@ -625,19 +639,26 @@ public class ExtensionLoader<T> {
 
     @SuppressWarnings("unchecked")
     private T createExtension(String name, boolean wrap) {
+        // ① 尝试从cachedClasses缓存中获取扩展点类的实现类，如果没有则去扫描SPI配置文件中，查看是否存在
         Class<?> clazz = getExtensionClasses().get(name);
         if (clazz == null) {
             throw findException(name);
         }
         try {
+            // ② 通过扩展点实现类名去从缓存中尝试获取，如果没有则通过反射创建一个实现类对象
             T instance = (T) EXTENSION_INSTANCES.get(clazz);
             if (instance == null) {
+                // ③ 先通过反射创建出clazz的实例，然后存放进缓存中
                 EXTENSION_INSTANCES.putIfAbsent(clazz, clazz.newInstance());
+                // ④ 随后再次从缓存中获取实例类对象
                 instance = (T) EXTENSION_INSTANCES.get(clazz);
             }
+            // ⑤ 自动装配扩展实现类对象中的属性，即调用其setter方法注入到其他扩展类实现类对象中
+            // 此处需要重点注意一下
             injectExtension(instance);
 
 
+            // 开启自动包装扩展实现类
             if (wrap) {
 
                 List<Class<?>> wrapperClassesList = new ArrayList<>();
@@ -658,6 +679,7 @@ public class ExtensionLoader<T> {
                 }
             }
 
+            // 如果扩展实现类实现了 Lifecycle 接口，在 initExtension() 方法中会调用 initialize() 方法进行初始化。
             initExtension(instance);
             return instance;
         } catch (Throwable t) {
@@ -753,6 +775,7 @@ public class ExtensionLoader<T> {
 
     private Map<String, Class<?>> getExtensionClasses() {
         Map<String, Class<?>> classes = cachedClasses.get();
+        // 双重检测，防止并发环境下指令重排序
         if (classes == null) {
             synchronized (cachedClasses) {
                 classes = cachedClasses.get();
@@ -785,11 +808,13 @@ public class ExtensionLoader<T> {
      * extract and cache default extension name if exists
      */
     private void cacheDefaultExtensionName() {
+        // 获取 SPI的注解对象
         final SPI defaultAnnotation = type.getAnnotation(SPI.class);
         if (defaultAnnotation == null) {
             return;
         }
 
+        // 获取@SPI注解的value值
         String value = defaultAnnotation.value();
         if ((value = value.trim()).length() > 0) {
             String[] names = NAME_SEPARATOR.split(value);
@@ -809,12 +834,14 @@ public class ExtensionLoader<T> {
 
     private void loadDirectory(Map<String, Class<?>> extensionClasses, String dir, String type,
                                boolean extensionLoaderClassLoaderFirst, boolean overridden, String... excludedPackages) {
+        // dir就是指的 META-INF；type指的当前ExtensionLoader的类型，包括：internal、dubbo、service这三种，所以
+        // fileName会拼接成：META-INF/services、META-INF/dubbo、META-INF/dubbo/internal这三个目录
         String fileName = dir + type;
         try {
             Enumeration<java.net.URL> urls = null;
             ClassLoader classLoader = findClassLoader();
 
-            // try to load from ExtensionLoader's ClassLoader first
+            // 首先尝试去获取ExtensionLoader
             if (extensionLoaderClassLoaderFirst) {
                 ClassLoader extensionLoaderClassLoader = ExtensionLoader.class.getClassLoader();
                 if (ClassLoader.getSystemClassLoader() != extensionLoaderClassLoader) {
@@ -824,13 +851,16 @@ public class ExtensionLoader<T> {
 
             if (urls == null || !urls.hasMoreElements()) {
                 if (classLoader != null) {
+                    // 去类路径下查找文件
                     urls = classLoader.getResources(fileName);
                 } else {
+                    // 去系统磁盘中查找该文件
                     urls = ClassLoader.getSystemResources(fileName);
                 }
             }
 
             if (urls != null) {
+                // 如果urls包含多个路径，则获取多个URL分别去获取对应URL的文件
                 while (urls.hasMoreElements()) {
                     java.net.URL resourceURL = urls.nextElement();
                     loadResource(extensionClasses, classLoader, resourceURL, overridden, excludedPackages);
