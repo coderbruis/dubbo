@@ -695,8 +695,14 @@ public class ExtensionLoader<T> {
         return getExtensionClasses().containsKey(name);
     }
 
+    /**
+     * 向属性中注入扩展点实现类
+     * @param instance
+     * @return
+     */
     private T injectExtension(T instance) {
 
+        // 这里的ExtensionFactory类型的objectFactory是什么？
         if (objectFactory == null) {
             return instance;
         }
@@ -718,9 +724,12 @@ public class ExtensionLoader<T> {
                 }
 
                 try {
+                    // 获取setXxx的Xxx属性
                     String property = getSetterProperty(method);
+                    // 通过ExtensionFactory去获取Xxx的扩展点实现类
                     Object object = objectFactory.getExtension(pt, property);
                     if (object != null) {
+                        // 如果扩展点实现类不为空，则调用setXxx将扩展点实现类注入到属性中
                         method.invoke(instance, object);
                     }
                 } catch (Exception e) {
@@ -1056,7 +1065,12 @@ public class ExtensionLoader<T> {
         }
     }
 
+    /**
+     * 获取自适应扩展点实现类
+     * @return
+     */
     private Class<?> getAdaptiveExtensionClass() {
+        // 获取扩展点实现类，如果缓存中没有则去扫描SPI文件，扫描到扩展点实现类后则存入cachedClasses缓存中
         getExtensionClasses();
         if (cachedAdaptiveClass != null) {
             return cachedAdaptiveClass;
@@ -1064,9 +1078,14 @@ public class ExtensionLoader<T> {
         return cachedAdaptiveClass = createAdaptiveExtensionClass();
     }
 
+    /**
+     * Dubbo中通过Javassist以动态代理的方式生产一个代理类，即代理自适应扩展点实现类
+     * @return
+     */
     private Class<?> createAdaptiveExtensionClass() {
         String code = new AdaptiveClassCodeGenerator(type, cachedDefaultName).generate();
         ClassLoader classLoader = findClassLoader();
+        // 这里Compiler的实现类是Javassist是JavassistCompiler
         org.apache.dubbo.common.compiler.Compiler compiler = ExtensionLoader.getExtensionLoader(org.apache.dubbo.common.compiler.Compiler.class).getAdaptiveExtension();
         return compiler.compile(code, classLoader);
     }
