@@ -94,12 +94,14 @@ public class ExtensionLoader<T> {
     // 扩展点加载器类型，负责当前扩展点的加载工作
     private final Class<?> type;
 
-    // 扩展类工厂
+    // 扩展类加载工厂
+    // 从ExtensionLoader的构造方法可以看出，对于默认的ExtensionFactory.class来说，是没有objectFactory熟悉对象值的
     private final ExtensionFactory objectFactory;
 
+    // 扩展点实现类名称缓存 key是对应的T的扩展点实现类Class，value是扩展点名称
     private final ConcurrentMap<Class<?>, String> cachedNames = new ConcurrentHashMap<>();
 
-    // 扩展实现类缓存
+    // 扩展点实现类Class缓存 当前T的扩展点名称作为key，value是对应的扩展点实现类Class    cachedNames和cahcedClasses是"相反关系"
     private final Holder<Map<String, Class<?>>> cachedClasses = new Holder<>();
 
     // @Activate注解的实现类缓存
@@ -107,6 +109,7 @@ public class ExtensionLoader<T> {
     private final ConcurrentMap<String, Holder<Object>> cachedInstances = new ConcurrentHashMap<>();
     // 扩展点适配实例缓存
     private final Holder<Object> cachedAdaptiveInstance = new Holder<>();
+    // adaptive扩展点实现类对象的缓存
     private volatile Class<?> cachedAdaptiveClass = null;
 
     // 记录了当前扩展类加载器@SPI注解的value值，即默认的扩展名
@@ -156,8 +159,15 @@ public class ExtensionLoader<T> {
         return asList(strategies);
     }
 
+    /**
+     *
+     * ExtensionLoader构造方法。
+     * 如果传入的type不为ExtensionFactory，则
+     */
     private ExtensionLoader(Class<?> type) {
         this.type = type;
+        // 从此处可以知道，对于默认的ExtensionFactory.class来说，是没有objectFactory熟悉对象值的
+        // 如果type不为ExtensionFactory类型的，则会创建一个ExtensionFactory的适配工厂来成为objectFactory对象属性
         objectFactory = (type == ExtensionFactory.class ? null : ExtensionLoader.getExtensionLoader(ExtensionFactory.class).getAdaptiveExtension());
     }
 
@@ -165,6 +175,14 @@ public class ExtensionLoader<T> {
         return type.isAnnotationPresent(SPI.class);
     }
 
+    /**
+     *
+     * 注意这里的getExtensionLoader和ExtensionLoader之间的微妙关系，迭代调用最后是以type为ExtensionLoader作为终止条件，否则会一直循环下去。
+     *
+     * @param type
+     * @param <T>
+     * @return
+     */
     @SuppressWarnings("unchecked")
     public static <T> ExtensionLoader<T> getExtensionLoader(Class<T> type) {
         if (type == null) {
@@ -180,6 +198,7 @@ public class ExtensionLoader<T> {
 
         ExtensionLoader<T> loader = (ExtensionLoader<T>) EXTENSION_LOADERS.get(type);
         if (loader == null) {
+            // 如果初始指定的EXTENSION_LOADER为空值，则新new一个ExtensionLoader对象存放至其中。要注意ExtensionLoader的构造方法内容！
             EXTENSION_LOADERS.putIfAbsent(type, new ExtensionLoader<T>(type));
             loader = (ExtensionLoader<T>) EXTENSION_LOADERS.get(type);
         }
@@ -664,6 +683,7 @@ public class ExtensionLoader<T> {
             // 开启自动包装扩展实现类
             if (wrap) {
 
+                // 扫描包装类的集合
                 List<Class<?>> wrapperClassesList = new ArrayList<>();
                 if (cachedWrapperClasses != null) {
                     wrapperClassesList.addAll(cachedWrapperClasses);
@@ -809,10 +829,12 @@ public class ExtensionLoader<T> {
         Map<String, Class<?>> extensionClasses = new HashMap<>();
 
         for (LoadingStrategy strategy : strategies) {
+            // 加载SPI配置文件中的扩展点实现类
             loadDirectory(extensionClasses, strategy.directory(), type.getName(), strategy.preferExtensionClassLoader(), strategy.overridden(), strategy.excludedPackages());
             loadDirectory(extensionClasses, strategy.directory(), type.getName().replace("org.apache", "com.alibaba"), strategy.preferExtensionClassLoader(), strategy.overridden(), strategy.excludedPackages());
         }
 
+        // 这里只会返回非Adaptive和非Wrapper类型的扩展点实现类Class，因为Adaptive会被缓存到cachedAdaptiveClasses缓存中，儿Wrapper类型的类会被缓存到cachedWrapperClasses缓存中。
         return extensionClasses;
     }
 
@@ -885,12 +907,22 @@ public class ExtensionLoader<T> {
         }
     }
 
+    /**
+     * 加载SPI配置文件中的配置内容
+     * @param extensionClasses
+     * @param classLoader
+     * @param resourceURL
+     * @param overridden
+     * @param excludedPackages
+     */
     private void loadResource(Map<String, Class<?>> extensionClasses, ClassLoader classLoader,
                               java.net.URL resourceURL, boolean overridden, String... excludedPackages) {
         try {
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(resourceURL.openStream(), StandardCharsets.UTF_8))) {
                 String line;
+                // line即SPI中key=xxx配置项内容
                 while ((line = reader.readLine()) != null) {
+                    // 获取#索引所在位置
                     final int ci = line.indexOf('#');
                     if (ci >= 0) {
                         line = line.substring(0, ci);
@@ -901,10 +933,13 @@ public class ExtensionLoader<T> {
                             String name = null;
                             int i = line.indexOf('=');
                             if (i > 0) {
+                                // name表示扩展点的名称
                                 name = line.substring(0, i).trim();
+                                // line表示扩展点的全限定类名称
                                 line = line.substring(i + 1).trim();
                             }
                             if (line.length() > 0 && !isExcluded(line, excludedPackages)) {
+                                // 加载扩展点的全限定类名称
                                 loadClass(extensionClasses, resourceURL, Class.forName(line, true, classLoader), name, overridden);
                             }
                         } catch (Throwable t) {

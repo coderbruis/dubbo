@@ -25,6 +25,10 @@ import java.util.Collections;
 import java.util.List;
 
 /**
+ *
+ * AdaptiveExtensionFactorey不作任何功能，而是用来适配SpiExtensionFactory和SpringExtensionFactory这两种实现。
+ * 即AdaptiveExtensionFactory会根据运行时的一些状态来选择具体使用哪个ExtensionFactory实现类。
+ *
  * AdaptiveExtensionFactory
  */
 @Adaptive
@@ -36,9 +40,12 @@ public class AdaptiveExtensionFactory implements ExtensionFactory {
         // 获取ExtensionFactory这个扩展点的扩展加载器
         ExtensionLoader<ExtensionFactory> loader = ExtensionLoader.getExtensionLoader(ExtensionFactory.class);
         List<ExtensionFactory> list = new ArrayList<ExtensionFactory>();
+        // 因为loader是ExtensionFactory类型的，所以loader.getSupportedExtension()的值为SPI
         for (String name : loader.getSupportedExtensions()) {
+            // 去获取ExtensionFactory的SPI扩展点实现类
             list.add(loader.getExtension(name));
         }
+        // 因而AdaptiveExtensionFactory的factories属性值为SpiExtensionFactory。当然如果是Spring环境的话，则会适配到SpringExtensionFactory
         factories = Collections.unmodifiableList(list);
     }
 
