@@ -1121,6 +1121,7 @@ public class ExtensionLoader<T> {
         String code = new AdaptiveClassCodeGenerator(type, cachedDefaultName).generate();
         ClassLoader classLoader = findClassLoader();
         // 这里Compiler的实现类是Javassist是JavassistCompiler
+        // 由于传入的是Compiler，即获取到的是ExtensionLoader<Compiler> loader，随后调用loader#getAdaptiveExtension()
         org.apache.dubbo.common.compiler.Compiler compiler = ExtensionLoader.getExtensionLoader(org.apache.dubbo.common.compiler.Compiler.class).getAdaptiveExtension();
         return compiler.compile(code, classLoader);
     }
