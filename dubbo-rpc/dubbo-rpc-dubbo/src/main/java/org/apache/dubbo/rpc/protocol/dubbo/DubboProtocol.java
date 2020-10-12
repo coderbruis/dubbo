@@ -88,7 +88,7 @@ import static org.apache.dubbo.rpc.protocol.dubbo.Constants.SHARE_CONNECTIONS_KE
 
 
 /**
- * dubbo protocol support.
+ * dubbo协议对象
  */
 public class DubboProtocol extends AbstractProtocol {
 
@@ -105,8 +105,16 @@ public class DubboProtocol extends AbstractProtocol {
     private final ConcurrentMap<String, Object> locks = new ConcurrentHashMap<>();
     private final Set<String> optimizers = new ConcurrentHashSet<>();
 
+    // 交换器处理器？相应PRC请求的？
     private ExchangeHandler requestHandler = new ExchangeHandlerAdapter() {
 
+        /**
+         * 应答请求？
+         * @param channel
+         * @param message
+         * @return
+         * @throws RemotingException
+         */
         @Override
         public CompletableFuture<Object> reply(ExchangeChannel channel, Object message) throws RemotingException {
 
@@ -279,6 +287,7 @@ public class DubboProtocol extends AbstractProtocol {
 
     @Override
     public <T> Exporter<T> export(Invoker<T> invoker) throws RpcException {
+        // 获取Invoker的URL（统一资源定位符）
         URL url = invoker.getUrl();
 
         // export service.
@@ -306,12 +315,14 @@ public class DubboProtocol extends AbstractProtocol {
         return exporter;
     }
 
+    // 开启服务
     private void openServer(URL url) {
-        // find server.
+        // 获取服务地址
         String key = url.getAddress();
         //client can export a service which's only for server to invoke
         boolean isServer = url.getParameter(IS_SERVER_KEY, true);
         if (isServer) {
+            // 服务缓存
             ProtocolServer server = serverMap.get(key);
             if (server == null) {
                 synchronized (this) {
@@ -327,6 +338,7 @@ public class DubboProtocol extends AbstractProtocol {
         }
     }
 
+    // 创建服务
     private ProtocolServer createServer(URL url) {
         url = URLBuilder.from(url)
                 // send readonly event when server closes, it's enabled by default

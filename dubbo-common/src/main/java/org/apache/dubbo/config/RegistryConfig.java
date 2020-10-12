@@ -30,7 +30,7 @@ import static org.apache.dubbo.common.utils.PojoUtils.updatePropertyIfAbsent;
 import static org.apache.dubbo.config.Constants.REGISTRIES_SUFFIX;
 
 /**
- * RegistryConfig
+ * 注册中心配置
  *
  * @export
  */
@@ -40,32 +40,32 @@ public class RegistryConfig extends AbstractConfig {
     private static final long serialVersionUID = 5508512956753757169L;
 
     /**
-     * Register center address
+     * 注册中心地址
      */
     private String address;
 
     /**
-     * Username to login register center
+     * 注册中心用户名
      */
     private String username;
 
     /**
-     * Password to login register center
+     * 注册中心密码
      */
     private String password;
 
     /**
-     * Default port for register center
+     * 端口
      */
     private Integer port;
 
     /**
-     * Protocol for register center
+     * 协议
      */
     private String protocol;
 
     /**
-     * Network transmission type
+     * 网络传输类型
      */
     private String transporter;
 

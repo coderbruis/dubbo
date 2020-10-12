@@ -174,10 +174,8 @@ public abstract class AbstractInterfaceConfig extends AbstractMethodConfig {
         return urls;
     }
 
-    /**
-     * Check whether the registry config is exists, and then conversion it to {@link RegistryConfig}
-     */
     public void checkRegistry() {
+        // 将RegistryIds转化为注册中心
         convertRegistryIdsToRegistries();
 
         for (RegistryConfig registryConfig : registries) {
@@ -313,15 +311,19 @@ public abstract class AbstractInterfaceConfig extends AbstractMethodConfig {
     public void completeCompoundConfigs(AbstractInterfaceConfig interfaceConfig) {
         if (interfaceConfig != null) {
             if (application == null) {
+                // 设置Application模块
                 setApplication(interfaceConfig.getApplication());
             }
             if (module == null) {
+                // 设置Module
                 setModule(interfaceConfig.getModule());
             }
             if (registries == null) {
+                // 设置注册中心
                 setRegistries(interfaceConfig.getRegistries());
             }
             if (monitor == null) {
+                // 设置monitor
                 setMonitor(interfaceConfig.getMonitor());
             }
         }

@@ -47,7 +47,7 @@ import java.util.stream.Collectors;
 import static org.apache.dubbo.common.utils.ReflectUtils.findMethodByMethodSignature;
 
 /**
- * Utility methods and public methods for parsing configuration
+ * 用于解析配置的实用方法和公共方法
  *
  * @export
  */
@@ -57,12 +57,12 @@ public abstract class AbstractConfig implements Serializable {
     private static final long serialVersionUID = 4267533505537413570L;
 
     /**
-     * The legacy properties container
+     * 遗产配置容器
      */
     private static final Map<String, String> LEGACY_PROPERTIES = new HashMap<String, String>();
 
     /**
-     * The suffix container
+     * 前缀配置容器
      */
     private static final String[] SUFFIXES = new String[]{"Config", "Bean", "ConfigBase"};
 
@@ -78,9 +78,12 @@ public abstract class AbstractConfig implements Serializable {
     }
 
     /**
-     * The config id
+     * 配置ID
      */
     protected String id;
+    /**
+     * 配置前缀
+     */
     protected String prefix;
 
     protected final AtomicBoolean refreshed = new AtomicBoolean(false);
@@ -131,6 +134,7 @@ public abstract class AbstractConfig implements Serializable {
                     } else {
                         key = calculatePropertyFromGetter(name);
                     }
+                    // 调用setter方法
                     Object value = method.invoke(config);
                     String str = String.valueOf(value).trim();
                     if (value != null && str.length() > 0) {

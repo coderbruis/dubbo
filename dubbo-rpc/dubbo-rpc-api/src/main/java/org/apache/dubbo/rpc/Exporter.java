@@ -17,6 +17,8 @@
 package org.apache.dubbo.rpc;
 
 /**
+ * Exporter接口，用于进行服务暴露
+ *
  * Exporter. (API/SPI, Prototype, ThreadSafe)
  *
  * @see org.apache.dubbo.rpc.Protocol#export(Invoker)
@@ -26,6 +28,7 @@ package org.apache.dubbo.rpc;
 public interface Exporter<T> {
 
     /**
+     * 获得invoker
      * get invoker.
      *
      * @return invoker

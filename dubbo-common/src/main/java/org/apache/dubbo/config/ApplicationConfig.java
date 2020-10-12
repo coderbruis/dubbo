@@ -48,7 +48,7 @@ import static org.apache.dubbo.config.Constants.TEST_ENVIRONMENT;
 
 
 /**
- * The application info
+ * Dubbo应用信息
  *
  * @export
  */
@@ -98,7 +98,7 @@ public class ApplicationConfig extends AbstractConfig {
     private String logger;
 
     /**
-     * Registry centers
+     * 注册中心配置
      */
     private List<RegistryConfig> registries;
     private String registryIds;

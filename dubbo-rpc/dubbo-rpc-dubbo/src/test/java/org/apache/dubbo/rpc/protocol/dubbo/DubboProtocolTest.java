@@ -76,8 +76,11 @@ public class DubboProtocolTest {
 
     @Test
     public void testDubboProtocol() throws Exception {
+        // 获取服务
         DemoService service = new DemoServiceImpl();
+        // 获取端口号
         int port = NetUtils.getAvailablePort();
+        // 进行服务暴露，服务暴露地址是：dubbo://127.0.0.1:port/DemoServicexxxx..
         protocol.export(proxy.getInvoker(service, DemoService.class, URL.valueOf("dubbo://127.0.0.1:" + port + "/" + DemoService.class.getName())));
         service = proxy.getProxy(protocol.refer(DemoService.class, URL.valueOf("dubbo://127.0.0.1:" + port + "/" + DemoService.class.getName()).addParameter("timeout",
                 3000L)));
@@ -93,13 +96,13 @@ public class DubboProtocolTest {
 
         service = proxy.getProxy(protocol.refer(DemoService.class, URL.valueOf("dubbo://127.0.0.1:" + port + "/" + DemoService.class.getName() + "?client=netty").addParameter("timeout",
                 3000L)));
-        // test netty client
+        // 测试Netty客户端
         StringBuffer buf = new StringBuffer();
         for (int i = 0; i < 1024 * 32 + 32; i++)
             buf.append('A');
         System.out.println(service.stringLength(buf.toString()));
 
-        // cast to EchoService
+        // 转化成EchoService
         EchoService echo = proxy.getProxy(protocol.refer(EchoService.class, URL.valueOf("dubbo://127.0.0.1:" + port + "/" + DemoService.class.getName() + "?client=netty").addParameter("timeout",
                 3000L)));
         assertEquals(echo.$echo(buf.toString()), buf.toString());

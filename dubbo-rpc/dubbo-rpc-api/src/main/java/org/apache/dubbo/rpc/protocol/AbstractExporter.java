@@ -22,12 +22,15 @@ import org.apache.dubbo.rpc.Exporter;
 import org.apache.dubbo.rpc.Invoker;
 
 /**
- * AbstractExporter.
+ * 抽象Exporter
  */
 public abstract class AbstractExporter<T> implements Exporter<T> {
 
     protected final Logger logger = LoggerFactory.getLogger(getClass());
 
+    /**
+     * 一个Invoker包含了需要Invocation的对象
+     */
     private final Invoker<T> invoker;
 
     private volatile boolean unexported = false;

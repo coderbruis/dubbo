@@ -22,7 +22,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 
 /**
- * The service provider default configuration
+ * 服务提供者配置
  *
  * @export
  * @see org.apache.dubbo.config.ProtocolConfig

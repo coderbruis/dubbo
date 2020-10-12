@@ -26,7 +26,7 @@ import static org.apache.dubbo.common.constants.CommonConstants.SSL_ENABLED_KEY;
 import static org.apache.dubbo.config.Constants.PROTOCOLS_SUFFIX;
 
 /**
- * ProtocolConfig
+ * 协议配置
  *
  * @export
  */
@@ -35,17 +35,17 @@ public class ProtocolConfig extends AbstractConfig {
     private static final long serialVersionUID = 6913423882496634749L;
 
     /**
-     * Protocol name
+     * 协议名称
      */
     private String name;
 
     /**
-     * Service ip address (when there are multiple network cards available)
+     * 服务host
      */
     private String host;
 
     /**
-     * Service port
+     * 服务port
      */
     private Integer port;
 

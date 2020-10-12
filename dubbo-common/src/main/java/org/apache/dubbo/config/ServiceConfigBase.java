@@ -203,8 +203,10 @@ public abstract class ServiceConfigBase<T> extends AbstractServiceConfig {
 
     public void checkProtocol() {
         if (CollectionUtils.isEmpty(protocols) && provider != null) {
+            // 如果protocols为空，则从provider中取出协议；当前的protocols是在service中的；
             setProtocols(provider.getProtocols());
         }
+        // 将ProtocolId转化为Protocol
         convertProtocolIdsToProtocols();
     }
 
@@ -242,6 +244,7 @@ public abstract class ServiceConfigBase<T> extends AbstractServiceConfig {
                 setProtocols(protocolConfigs);
             }
         } else {
+            // 如果protocolIds不为空，则拆分成字符串数组
             String[] arr = COMMA_SPLIT_PATTERN.split(protocolIds);
             List<ProtocolConfig> tmpProtocols = new ArrayList<>();
             Arrays.stream(arr).forEach(id -> {
@@ -414,6 +417,7 @@ public abstract class ServiceConfigBase<T> extends AbstractServiceConfig {
     }
 
     private void computeValidProtocolIds() {
+        // 判断Service中的protocolId是否为空，如果为空则将provider中的protocol设置到serviceConfig中
         if (StringUtils.isEmpty(getProtocolIds())) {
             if (getProvider() != null && StringUtils.isNotEmpty(getProvider().getProtocolIds())) {
                 setProtocolIds(getProvider().getProtocolIds());

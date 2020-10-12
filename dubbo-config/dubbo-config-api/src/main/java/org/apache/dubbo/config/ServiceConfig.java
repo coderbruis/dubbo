@@ -185,6 +185,9 @@ public class ServiceConfig<T> extends ServiceConfigBase<T> {
         dispatch(new ServiceConfigUnexportedEvent(this));
     }
 
+    /**
+     * 服务暴露的入口方法
+     */
     public synchronized void export() {
         if (!shouldExport()) {
             return;
@@ -195,9 +198,10 @@ public class ServiceConfig<T> extends ServiceConfigBase<T> {
             bootstrap.initialize();
         }
 
+        // 检查并且更新存根配置
         checkAndUpdateSubConfigs();
 
-        //init serviceMetadata
+        // 初始服务元数据
         serviceMetadata.setVersion(getVersion());
         serviceMetadata.setGroup(getGroup());
         serviceMetadata.setDefaultGroup(getGroup());
@@ -220,17 +224,22 @@ public class ServiceConfig<T> extends ServiceConfigBase<T> {
         dispatch(new ServiceConfigExportedEvent(this));
     }
 
+    /**
+     * 检查并且更新存根配置
+     */
     private void checkAndUpdateSubConfigs() {
-        // Use default configs defined explicitly with global scope
+        // 在全局范围内显示指定默认配置
         completeCompoundConfigs();
+        // 检查provider是否为空，没有则新建一个ProviderConfig对象
         checkDefault();
+        // 检查Protocol协议
         checkProtocol();
-        // init some null configuration.
+        // 初始某些空配置
         List<ConfigInitializer> configInitializers = ExtensionLoader.getExtensionLoader(ConfigInitializer.class)
                 .getActivateExtension(URL.valueOf("configInitializer://"), (String[]) null);
         configInitializers.forEach(e -> e.initServiceConfig(this));
 
-        // if protocol is not injvm checkRegistry
+        // 如果协议不是inJVM，则检查注册中心
         if (!isOnlyInJvm()) {
             checkRegistry();
         }
@@ -316,8 +325,10 @@ public class ServiceConfig<T> extends ServiceConfigBase<T> {
      */
     @SuppressWarnings({"unchecked", "rawtypes"})
     private void doExportUrls() {
+        // 服务持久对象
         ServiceRepository repository = ApplicationModel.getServiceRepository();
         ServiceDescriptor serviceDescriptor = repository.registerService(getInterfaceClass());
+        // 注册Provider
         repository.registerProvider(
                 // 获取服务的唯一服务名称
                 getUniqueServiceName(),
@@ -328,13 +339,14 @@ public class ServiceConfig<T> extends ServiceConfigBase<T> {
                 serviceMetadata
         );
 
+        // 获取当前服务对应的注册中心实例
         List<URL> registryURLs = ConfigValidationUtils.loadRegistries(this, true);
 
         for (ProtocolConfig protocolConfig : protocols) {
             String pathKey = URL.buildKey(getContextPath(protocolConfig)
                     .map(p -> p + "/" + path)
                     .orElse(path), group, version);
-            // In case user specified path, register service one more time to map it to path.
+            // 如果用户指定了路径，请再注册一次服务以将其映射到路径
             repository.registerService(pathKey, interfaceClass);
             // TODO, uncomment this line once service key is unified
             serviceMetadata.setServiceKey(pathKey);
@@ -346,10 +358,11 @@ public class ServiceConfig<T> extends ServiceConfigBase<T> {
      *
      * 真正的服务暴露逻辑
      *
-     * @param protocolConfig
-     * @param registryURLs
+     * @param protocolConfig 协议配置
+     * @param registryURLs 注册中心地址
      */
     private void doExportUrlsFor1Protocol(ProtocolConfig protocolConfig, List<URL> registryURLs) {
+        // 协议名称
         String name = protocolConfig.getName();
         if (StringUtils.isEmpty(name)) {
             name = DUBBO;
@@ -555,7 +568,7 @@ public class ServiceConfig<T> extends ServiceConfigBase<T> {
     }
 
     /**
-     * Determine if it is injvm
+     * 判断是否是inJVM模式
      *
      * @return
      */
