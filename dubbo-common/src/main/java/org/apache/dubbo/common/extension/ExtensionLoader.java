@@ -240,8 +240,14 @@ public class ExtensionLoader<T> {
         return getExtensionName(extensionInstance.getClass());
     }
 
+    /**
+     * 根据扩展点类对象获取扩展点名称
+     * @param extensionClass
+     * @return
+     */
     public String getExtensionName(Class<?> extensionClass) {
-        getExtensionClasses();// load class
+        // 加载扩展点类Class
+        getExtensionClasses();
         return cachedNames.get(extensionClass);
     }
 
@@ -609,6 +615,7 @@ public class ExtensionLoader<T> {
 
     @SuppressWarnings("unchecked")
     public T getAdaptiveExtension() {
+        // 从缓存汇总获取适配器实例
         Object instance = cachedAdaptiveInstance.get();
         if (instance == null) {
             if (createAdaptiveInstanceError != null) {
@@ -617,6 +624,7 @@ public class ExtensionLoader<T> {
                         createAdaptiveInstanceError);
             }
 
+            // 加锁，双重校验判断此时缓存里还有没有适配器实例
             synchronized (cachedAdaptiveInstance) {
                 instance = cachedAdaptiveInstance.get();
                 if (instance == null) {
@@ -659,6 +667,12 @@ public class ExtensionLoader<T> {
         return new IllegalStateException(buf.toString());
     }
 
+    /**
+     * 创建扩展点实现类
+     * @param name 扩展点名称
+     * @param wrap 是否包装
+     * @return
+     */
     @SuppressWarnings("unchecked")
     private T createExtension(String name, boolean wrap) {
         // ① 尝试从cachedClasses缓存中获取扩展点类的实现类，如果没有则去扫描SPI配置文件中，查看是否存在
@@ -722,22 +736,24 @@ public class ExtensionLoader<T> {
      */
     private T injectExtension(T instance) {
 
-        // 这里的ExtensionFactory类型的objectFactory是什么？
+        // 这里的ExtensionFactory类型的objectFactory是什么？ objectFactory一般为ExtensionFactory
         if (objectFactory == null) {
             return instance;
         }
 
         try {
             for (Method method : instance.getClass().getMethods()) {
+                // 跳过不是setter的方法
                 if (!isSetter(method)) {
                     continue;
                 }
                 /**
-                 * Check {@link DisableInject} to see if we need auto injection for this property
+                 * 如果方法上明确标注了@DisableInject注解，忽略该方法
                  */
                 if (method.getAnnotation(DisableInject.class) != null) {
                     continue;
                 }
+                // 获取方法参数类Class对象
                 Class<?> pt = method.getParameterTypes()[0];
                 if (ReflectUtils.isPrimitives(pt)) {
                     continue;
@@ -821,7 +837,7 @@ public class ExtensionLoader<T> {
     }
 
     /**
-     * synchronized in getExtensionClasses
+     * 同步加载扩展点Class对象
      */
     private Map<String, Class<?>> loadExtensionClasses() {
         cacheDefaultExtensionName();
@@ -839,7 +855,7 @@ public class ExtensionLoader<T> {
     }
 
     /**
-     * extract and cache default extension name if exists
+     * 提取并缓存存在的默认扩展点名称
      */
     private void cacheDefaultExtensionName() {
         // 获取 SPI的注解对象
@@ -974,12 +990,13 @@ public class ExtensionLoader<T> {
                     + clazz.getName() + " is not subtype of interface.");
         }
         // 如果加载的扩展点实现类中有@Adaptive注解修饰，则将该类缓存到cachedAdaptiveClass缓存中
-        // 而如果对于有@Adaptive修饰的接口，并且修饰在了方法上，没有@Adaptive注解修饰的扩展点实现类的话，则会通过Javassist生成代理代码，生成对于的自适应逻辑
+        // 而如果对于有@Adaptive修饰的接口，并且修饰在了方法上，没有@Adaptive注解修饰的扩展点实现类的话，则会通过Javassist生成代理代码，生成对应的自适应方法逻辑
         if (clazz.isAnnotationPresent(Adaptive.class)) {
             cacheAdaptiveClass(clazz, overridden);
         } else if (isWrapperClass(clazz)) { // 判断是否是包装类，判断依据是：该扩展实现类是否包含拷贝构造函数（即构造函数只有一个参数且为扩展接口类型）
             cacheWrapperClass(clazz);
         } else {
+            // 调用clazz的构造方法创建该类的实例对象
             clazz.getConstructor();
             if (StringUtils.isEmpty(name)) {
                 name = findAnnotationName(clazz);

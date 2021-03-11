@@ -42,13 +42,13 @@ import java.io.IOException;
 import java.io.InputStream;
 
 /**
- * ExchangeCodec.
+ * ExchangeCodec. 编解码器
  */
 public class ExchangeCodec extends TelnetCodec {
 
-    // header length.
+    // header length. 请求头长度？
     protected static final int HEADER_LENGTH = 16;
-    // magic header.
+    // magic header. 魔术头
     protected static final short MAGIC = (short) 0xdabb;
     protected static final byte MAGIC_HIGH = Bytes.short2bytes(MAGIC)[0];
     protected static final byte MAGIC_LOW = Bytes.short2bytes(MAGIC)[1];
@@ -208,33 +208,37 @@ public class ExchangeCodec extends TelnetCodec {
     }
 
     protected void encodeRequest(Channel channel, ChannelBuffer buffer, Request req) throws IOException {
+        // 获取指定或默认的序列化协议（默认协议为Hessian2）
         Serialization serialization = getSerialization(channel);
-        // header.
+        // header.  构造16位字节头
         byte[] header = new byte[HEADER_LENGTH];
-        // set magic number.
+        // set magic number.  占用2个字节存储魔数
         Bytes.short2bytes(MAGIC, header);
 
-        // set request and serialization flag.
+        // set request and serialization flag.   在第3个字节(16位和19~13位)分别存储请求标志和序列化协议序号
         header[2] = (byte) (FLAG_REQUEST | serialization.getContentTypeId());
 
         if (req.isTwoWay()) {
+            // 设置请求/响应标记
             header[2] |= FLAG_TWOWAY;
         }
         if (req.isEvent()) {
             header[2] |= FLAG_EVENT;
         }
 
-        // set request id.
+        // set request id.  设置请求唯一标识
         Bytes.long2bytes(req.getId(), header, 4);
 
         // encode request data.
         int savedWriteIndex = buffer.writerIndex();
+        // 跳过buffer头部16个字节，用于序列化消息体
         buffer.writerIndex(savedWriteIndex + HEADER_LENGTH);
         ChannelBufferOutputStream bos = new ChannelBufferOutputStream(buffer);
         ObjectOutput out = serialization.serialize(channel.getUrl(), bos);
         if (req.isEvent()) {
             encodeEventData(channel, out, req.getData());
         } else {
+            // 序列化请求调用，data一般是RpcInvocation
             encodeRequestData(channel, out, req.getData(), req.getVersion());
         }
         out.flushBuffer();
@@ -244,12 +248,16 @@ public class ExchangeCodec extends TelnetCodec {
         bos.flush();
         bos.close();
         int len = bos.writtenBytes();
+        // 检查是否超过默认8MB大小
         checkPayload(channel, len);
+        // 向消息长度写入头部第12个字节的偏移量(96~127位)
         Bytes.int2bytes(len, header, 12);
 
         // write
         buffer.writerIndex(savedWriteIndex);
+        // 写入完整报文头部到buffer
         buffer.writeBytes(header); // write header.
+        // 设置writerIndex到消息体结束位置
         buffer.writerIndex(savedWriteIndex + HEADER_LENGTH + len);
     }
 
